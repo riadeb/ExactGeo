@@ -26,5 +26,5 @@ MatrixXi F;
 // ------------ main program ----------------
 int main(int argc, char *argv[])
 {
-    
+    cout <<< "hhh";
 }

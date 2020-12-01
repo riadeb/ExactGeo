@@ -1,6 +1,8 @@
 {
     "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
     "files.associations": {
-        "utility": "cpp"
+        "utility": "cpp",
+        "vector": "cpp",
+        "iostream": "cpp"
     }
 }
