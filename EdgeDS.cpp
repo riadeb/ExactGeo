@@ -8,6 +8,7 @@
 #include <__nullptr>
 
 
+
 using namespace Eigen; // to use the classes provided by Eigen library
 using namespace std;
 
@@ -19,7 +20,7 @@ class Window {
     double p1,p2;
     double d1,d2,sigma;
     bool tau; //true if in order of edge->v1 , edge->v2
-    Window(Edge* e, int v1, int v2, double dd1, double dd2, double sig, bool _tau){
+    Window(Edge* e, double v1, double v2, double dd1, double dd2, double sig, bool _tau){
         edge = e; p1 = v2; p2 = v2; d1 = dd1; d2 = dd2; sigma = sig; tau = _tau;
     }
 
@@ -36,14 +37,22 @@ class Edge { //edge (oriented from smaller vertex to bigger vertex)
         }
 };
 
+class PairHash
+{
+public:
+  size_t operator()(const pair<int,int> &p) const
+  {
+    return p.first * p.second;
+  }
+};
 
 class EdgeDS {
 
     public :
 
     vector<vector<Edge*> > edges;
-    vector<vector<vector<Edge*> > > adjL;
-    MatrixXd V, MatrixXi F;
+    unordered_map<pair<int,int>, vector<pair<int,int> >, PairHash> adjL;
+    MatrixXd V; MatrixXi F;
 
     EdgeDS(MatrixXd _V, MatrixXi _F){
         V = _V;
@@ -51,7 +60,6 @@ class EdgeDS {
         int n = V.rows();
         int f = F.rows();
         edges = vector<vector<Edge*> > (n, vector<Edge*>(n, nullptr));
-        adjL =  vector<vector<vector<Edge*> > > (n ,vector<vector<Edge*> > (n));
         for(int i = 0; i < f; i++){
             for(int j = 0; j < 3; j++){
                   int v1 = F(i, j);
@@ -69,14 +77,8 @@ class EdgeDS {
                   int v1 = F(i, j);
                   int v2 = F(i, (j+1)%3);
                   int v3 = F(i, (j+2)%3);
-                  if(v1 < v2){ //the face is in the positive side of the edge
-                    adjL[v1][v2][true].pushback(edges[v2][v3]);
-                    adjL[v1][v2][true].pushback(edges[v1][v3]);
-                  }
-                  else{ //the face is in the negative side of the edge
-                    adjL[v2][v1][false].pushback(edges[v2][v3]);
-                    adjL[v2][v2][false].pushback(edges[v1][v3]);
-                  }
+                  adjL[make_pair(v1,v2)].push_back(make_pair(v2,v3));
+                    adjL[make_pair(v1,v2)].push_back(make_pair(v3,v1));
                  
             }
 
@@ -95,22 +97,38 @@ class EdgeDS {
     void exactGeo(int s){
             queue<Window> q;
             int n = edges.size();
-            for(int i = 0; i < n; i++){
+            for(int i = 0; i < n; i++){ //initialize queue
                 if(edges[s][i] != nullptr){
-                    Window w;
                     if(s < i){
-                         w = Window(edges[s][i], 0, dist(s,i), 0, dist(s,i),0,true);
+                         Window w = Window(edges[s][i], 0, dist(s,i), 0, dist(s,i),0,true);
+                         edges[s][i]->windows.push_back(w);
+                        q.push(w);
                     }
                     else{
-                         w = Window(edges[s][i], 0, dist(s,i), dist(s,i),0,0,false);
+                         Window w = Window(edges[s][i], 0, dist(s,i), dist(s,i),0,0,false);
+                         edges[s][i]->windows.push_back(w);
+                         q.push(w);
                     }
-                    edges[s][i]->windows.push_back(w);
-                    q.push(w);
-                    for(auto e : adjL[edges[s][i]->v1][edges[s][i]->v2][0]){
-                        fdd
+                    for(auto e : adjL[make_pair(s,i)]){
+                        if(e.first != s && e.second != s){
+                            Edge* edge =  edges[e.first][e.second];
+                            if(edge->windows.size() == 0){
+                                bool tau = e.first < e.second; //direction of window
+                                Window w = Window(edge,0, dist(edge->v1,edge->v2), dist(s,edge->v1), dist(s, edge->v2), 0,tau);
+                                q.push(w);
+                                edges[s][i]->windows.push_back(w);
+                            }
+                        }
                     }
                 }
             }
+
+        while(!q.empty()){
+            Window w = q.front();
+            q.pop();
+            
+
+        }
 
     }
 
