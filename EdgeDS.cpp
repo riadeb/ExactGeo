@@ -45,7 +45,17 @@ public:
     return p.first * p.second;
   }
 };
-
+class WindowInterval {
+    public :
+        int v1,v2; //directed edge (v1,v2)
+        list<Window>  windows;
+        WindowInterval(int u1, int u2){
+            v1 = u1;
+            v2 = u2;
+            windows = list<Window>();
+        }
+    
+};
 class EdgeDS {
 
     public :
@@ -94,6 +104,43 @@ class EdgeDS {
     double dist(int v1, int v2){
         return (V.row(v1) - V.row(v2)).norm();
     }
+    WindowInterval propagate(int v1, int v2, int v3, double alphal, double alphar, double p1, double p2, bool flip, double d1, double d2, double sigma){
+        Vector3d v21 = V.row(v1) - V.row(v2);
+        Vector3d v23 = V.row(v3) - V.row(v2);
+        double teta = acos(v21.dot(v23)/(v21.norm()*v23.norm()));
+        WindowInterval res(v2,v3);
+        if(flip){
+            res.v1 = v3;
+            res.v2 = v2;
+        }
+        if(M_PI -  alphal - teta <= 0){
+            double wl = v23.norm();
+            Window w(edges[v2][v3], 0, wl, p1, wl * sin(teta)/sin(alphal) , d1, false );
+            res.windows.push_back(w);
+            return res;
+        }
+        double wl = sin(alphal)*p1/(sin(alphal + teta));
+        if(wl >= v23.norm()) {
+            Window w(edges[v2][v3], 0, wl, p1, wl * sin(teta)/sin(alphal) , d1, false );
+            res.windows.push_back(w);
+            return res;
+        }
+        if(alphar <= teta){
+            Window windowl(edges[v2][v3], 0, wl, p1, wl * sin(teta)/sin(alphal) , d1, false);
+            res.windows.push_back(windowl);
+            Window windowr(edges[v2][v3], wl, v23.norm(), d1 + (wl * sin(teta)/sin(alphal)) , d2 + (v23.norm() *sin(teta)/sin(alphar) ) , sigma, false);
+            res.windows.push_back(windowr);
+            return res;
+        } 
+        double wr = sin(alphar)*p2/(sin(alphar - teta));
+        Window windowl(edges[v2][v3], 0, wl, p1, wl * sin(teta)/sin(alphal) , d1, false);
+        res.windows.push_back(windowl);
+        Window windowr(edges[v2][v3], wl, wr, d1 + (wl * sin(teta)/sin(alphal)) , d2 + (wr *sin(teta)/sin(alphar) ) , sigma, false);
+        res.windows.push_back(windowr);
+        Window windowrr(edges[v2][v3], wr, v23.norm() , wr *sin(teta)/sin(alphar), v23.norm() * sin(teta)/ sin(alphar) , d2, false);
+        res.windows.push_back(windowrr);
+        return res;
+    }
     void exactGeo(int s){
             queue<Window> q;
             int n = edges.size();
@@ -126,7 +173,68 @@ class EdgeDS {
         while(!q.empty()){
             Window w = q.front();
             q.pop();
+            Edge* edge = w.edge;
+            int v1,v2;
+            if(w.tau) { //v1 -> v2 is opposite edge of "edge"
+                v1 = edge->v2; v2 = edge->v1;
+            }
+            else{
+                v1 = edge->v1; v2 = edge->v2;
+            }
+            double dw = abs(w.p1 - w.p2);
+            if(adjL[make_pair(v1,v2)].size() == 0) continue;
+            pair<int,int> p = adjL[make_pair(v1,v2)][0];
+            int v3 = p.second; //p.firsy = v2
+            if(w.tau){
+                    double dp1 = w.d1;
+                    double dp2 = w.d2;
+                    double p1 = w.p1;
+                    double p2 = w.p2;
+                    double alphal = acos((dw*dw + dp1*dp1 - dp2*dp2) / (2*dw*dp1));
+                    double alphar = acos((dw*dw + dp2*dp2 - dp1*dp1) / (2*dw*dp2));
+                    propagate(v1,v2,v3,alphal,alphar,p1,p2,false,dp1,dp2,w.sigma);
+
+            }
+            else{
+                    Vector3d v21 = V.row(v1) - V.row(v2);
+                   double dp1 = w.d2;
+                    double dp2 = w.d1;
+                    double p1 = v21.norm() - w.p2;
+                    double p2 = v21.norm() - w.p1;
+                    double alphal = acos((dw*dw + dp1*dp1 - dp2*dp2) / (2*dw*dp1));
+                    double alphar = acos((dw*dw + dp2*dp2 - dp1*dp1) / (2*dw*dp2));
+                    propagate(v1,v2,v3,alphal,alphar,p1,p2,false,dp1,dp2,w.sigma); 
+            }
+
+            p = adjL[make_pair(v1,v2)][1];
+            int v3 = p.first; //p.second = v1
+            int temp = v2;
+            v2 = v1; v1 = temp;
+
+            if(!w.tau){
+                    double dp1 = w.d1;
+                    double dp2 = w.d2;
+                    double p1 = w.p1;
+                    double p2 = w.p2;
+                    double alphal = acos((dw*dw + dp1*dp1 - dp2*dp2) / (2*dw*dp1));
+                    double alphar = acos((dw*dw + dp2*dp2 - dp1*dp1) / (2*dw*dp2));
+                    propagate(v1,v2,v3,alphal,alphar,p1,p2,true,dp1,dp2,w.sigma);
+
+            }
+            else{
+                    Vector3d v21 = V.row(v1) - V.row(v2);
+                   double dp1 = w.d2;
+                    double dp2 = w.d1;
+                    double p1 = v21.norm() - w.p2;
+                    double p2 = v21.norm() - w.p1;
+                    double alphal = acos((dw*dw + dp1*dp1 - dp2*dp2) / (2*dw*dp1));
+                    double alphar = acos((dw*dw + dp2*dp2 - dp1*dp1) / (2*dw*dp2));
+                    propagate(v1,v2,v3,alphal,alphar,p1,p2,true,dp1,dp2,w.sigma); 
+            }
             
+            
+
+
 
         }
 
