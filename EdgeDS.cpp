@@ -54,6 +54,7 @@ class WindowInterval {
             v2 = u2;
             windows = list<Window>();
         }
+        
     
 };
 class EdgeDS {
@@ -105,6 +106,7 @@ class EdgeDS {
         return (V.row(v1) - V.row(v2)).norm();
     }
     WindowInterval propagate(int v1, int v2, int v3, double alphal, double alphar, double p1, double p2, bool flip, double d1, double d2, double sigma){
+
         Vector3d v21 = V.row(v1) - V.row(v2);
         Vector3d v23 = V.row(v3) - V.row(v2);
         double teta = acos(v21.dot(v23)/(v21.norm()*v23.norm()));
@@ -140,6 +142,64 @@ class EdgeDS {
         Window windowrr(edges[v2][v3], wr, v23.norm() , wr *sin(teta)/sin(alphar), v23.norm() * sin(teta)/ sin(alphar) , d2, false);
         res.windows.push_back(windowrr);
         return res;
+    }
+    void flip(WindowInterval &wi){ //flips the edge, reversing the windows as well
+                double de = dist(wi.v1, wi.v2);
+                int temp = wi.v1;
+                wi.v1 = wi.v2;
+                wi.v2 = temp;
+                for (auto i = wi.windows.rbegin(); i != wi.windows.rend(); ++i) {
+                        Window curr_w = *i;
+                        i->d1 = curr_w.d2;
+                        i->d2 = curr_w.d1;
+                        i->p1 = de - curr_w.p2;
+                        i->p2 = de - curr_w.p1;
+                }
+
+        }
+    double dist_to_source(Window& w,double x ){ //returns distance of point x in edge to the source using Window w
+            double dw = abs(w.p2 - w.p1);
+            double cosalphal =(dw*dw + w.d1*w.d1 - w.d2*w.d2) / (2*dw*w.d1);
+            return  w.sigma + sqrt(dw*dw + (x - w.p1)*(x - w.p1) - 2* dw*(x - w.p1)*cosalphal);
+    }
+
+
+    void intersect(Edge * edge, WindowInterval newWindows, queue<Window> & q){
+        if(newWindows.v1 > newWindows.v2) flip(newWindows);
+        if(edge->windows.empty()){
+            edge->windows = newWindows.windows;
+            for(auto w : edge->windows) q.push(w);
+            return;
+        }
+        for(auto w0 : newWindows.windows){
+                for(auto w1: edge->windows){
+                    if (w0.p1 >= w0.p2) break;
+                    double p1_inter = max(w0.p1, w1.p1);
+                    double p2_inter = min(w0.p2, w1.p2);
+                    if(p1_inter >= p2_inter) continue;
+                    double p1_w0 = dist_to_source(w0, p1_inter);
+                    double p2_w0 = dist_to_source(w0, p2_inter);
+                    double p1_w1 = dist_to_source(w1, p1_inter);
+                    double p2_w1 = dist_to_source(w1, p2_inter);
+                    if(p1_w0 > p1_w1 && p2_w0 > p2_w1){
+                        //w1 is smaller, keep it
+                        w0.p1 = p2_inter;
+                    }
+                    else if (p1_w0 < p1_w1 && p2_w0 < p2_w1){
+                        //W0 is smaller
+                        
+                    }
+                    else{
+
+                    }
+
+                }
+        }
+        
+
+
+
+
     }
     void exactGeo(int s){
             queue<Window> q;
@@ -185,6 +245,8 @@ class EdgeDS {
             if(adjL[make_pair(v1,v2)].size() == 0) continue;
             pair<int,int> p = adjL[make_pair(v1,v2)][0];
             int v3 = p.second; //p.firsy = v2
+
+            WindowInterval newWindows(v2,v3);
             if(w.tau){
                     double dp1 = w.d1;
                     double dp2 = w.d2;
@@ -192,7 +254,7 @@ class EdgeDS {
                     double p2 = w.p2;
                     double alphal = acos((dw*dw + dp1*dp1 - dp2*dp2) / (2*dw*dp1));
                     double alphar = acos((dw*dw + dp2*dp2 - dp1*dp1) / (2*dw*dp2));
-                    propagate(v1,v2,v3,alphal,alphar,p1,p2,false,dp1,dp2,w.sigma);
+                    newWindows = propagate(v1,v2,v3,alphal,alphar,p1,p2,false,dp1,dp2,w.sigma);
 
             }
             else{
@@ -203,7 +265,7 @@ class EdgeDS {
                     double p2 = v21.norm() - w.p1;
                     double alphal = acos((dw*dw + dp1*dp1 - dp2*dp2) / (2*dw*dp1));
                     double alphar = acos((dw*dw + dp2*dp2 - dp1*dp1) / (2*dw*dp2));
-                    propagate(v1,v2,v3,alphal,alphar,p1,p2,false,dp1,dp2,w.sigma); 
+                    newWindows = propagate(v1,v2,v3,alphal,alphar,p1,p2,false,dp1,dp2,w.sigma); 
             }
 
             p = adjL[make_pair(v1,v2)][1];
