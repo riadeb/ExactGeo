@@ -25,6 +25,20 @@ MatrixXi F;
 
 // ------------ main program ----------------
 int main(int argc, char *argv[])
-{
-    cout << "hhh";
+{   
+    if(argc < 2) argv[1] = "../data/cube_tri.off";
+    std::cout << "reading input file: " << argv[1] << std::endl;
+	igl::readOFF(argv[1], V, F);
+    EdgeDS ds = EdgeDS(V,F);
+    std::cout << "reading DONE " << argv[1] << std::endl;
+            ds.exactGeo(0);
+    std::cout << "GEO DONE " << argv[1] << std::endl;
+    igl::opengl::glfw::Viewer viewer; // create the 3d viewer
+
+	viewer.data().set_mesh(V, F);
+
+	viewer.core(0).align_camera_center(V, F);
+	viewer.launch(); // run the viewer
+
+
 }
