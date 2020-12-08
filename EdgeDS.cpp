@@ -139,11 +139,13 @@ double eps = 0.00001;
         } 
         */
         double sv2 = sqrt(d1*d1 + p1*p1 + 2* d1*p1*cos(alphal));
-        double beta = asin(sin(alphar) * d1/sv2);
+        double sinbeta = sin(alphar) * d2/sv2;
+        if(sinbeta > 1) sinbeta = 1;
+        double beta = asin(sinbeta);
         if(M_PI -  alphal - teta <= -eps){
             double wl = v23.norm();
                    Window w(edges[v2][v3], 0, wl, p1, dist_to_psource_in_new_window(wl, sv2,beta + teta) , d1, tau );
-                res.windows.push_back(w);
+              //  res.windows.push_back(w);
           
            
             return res;
@@ -151,14 +153,14 @@ double eps = 0.00001;
         double wl = sin(alphal)*p1/(sin(alphal + teta)); //alphal + teta > 0 because teta > 0
         if(wl-eps >= v23.norm()) {
             Window w(edges[v2][v3], 0, v23.norm(), p1, dist_to_psource_in_new_window(v23.norm(), sv2,beta + teta) , d1, tau );
-            res.windows.push_back(w);
+         //   res.windows.push_back(w);
             return res;
         }
   
         if(alphar-eps <= teta){
             if(wl > eps){
                     Window windowl(edges[v2][v3], 0, wl, p1, wl * sin(teta)/sin(alphal) , d1, tau);
-                    res.windows.push_back(windowl);
+                //    res.windows.push_back(windowl);
             }
 
             Window windowr(edges[v2][v3], wl, v23.norm(), d1 + (wl * sin(teta)/sin(alphal)) , dist_to_psource_in_new_window(v23.norm(), sv2,beta + teta) , sigma, tau);
@@ -168,13 +170,13 @@ double eps = 0.00001;
         double wr = sin(alphar)*p2/(sin(alphar - teta));
         if(wl > eps){
             Window windowl(edges[v2][v3], 0, wl, p1, wl * sin(teta)/sin(alphal) , d1, tau);
-            res.windows.push_back(windowl);
+           // res.windows.push_back(windowl);
         }
         if(wr+eps <= v23.norm()){
              Window windowr(edges[v2][v3], wl, wr, d1 + (wl * sin(teta)/sin(alphal)) , d2 + (wr *sin(teta)/sin(alphar) ) , sigma, tau);
             res.windows.push_back(windowr);
             Window windowrr(edges[v2][v3], wr, v23.norm() , wr *sin(teta)/sin(alphar), v23.norm() * sin(teta)/ sin(alphar) , d2, tau);
-            res.windows.push_back(windowrr);
+            //res.windows.push_back(windowrr);
         }
         else{
              Window windowr(edges[v2][v3], wl, v23.norm(), d1 + (wl * sin(teta)/sin(alphal)) , dist_to_psource_in_new_window(v23.norm(), sv2,beta + teta) , sigma, tau);
@@ -262,9 +264,9 @@ double eps = 0.00001;
                         //w0_intersection is smaller
                       
                         list<Window> newWins;
-                        if(w1_left.p1 < w1_left.p2) newWins.push_back(w1_left);
+                        if(w1_left.p1 + eps < w1_left.p2) newWins.push_back(w1_left);
                         newWins.push_back(w0_intersection);
-                        if(w1_right.p1 < w1_right.p2) newWins.push_back(w1_right);
+                        if(w1_right.p1 +eps < w1_right.p2) newWins.push_back(w1_right);
 
                         it = edge->windows.erase(it);
                         edge->windows.insert(it, newWins.begin(), newWins.end());
@@ -281,7 +283,7 @@ double eps = 0.00001;
                     }
                     else if(p1_w0 >= p1_w1 && p2_w0 <= p2_w1){
                             //w1 is the "left" window
-                            auto sol = solveEq(w0_intersection,w1_intersection);
+                            auto sol = solveEq(w1_intersection,w0_intersection);
                             double q1 = sol.first; double q2 = sol.second;
                             if(q1 == INFINITY || q1 != q1) {
                                 it++;
@@ -297,7 +299,7 @@ double eps = 0.00001;
                                     w0_intersection.d1 = dist_to_psource(w0,q1);
 
                                     list<Window> newWins;
-                                    w1_left.p2 = w1_intersection.p2; //stitiches the window 1
+                                    w1_left.p2 = w1_intersection.p2; //stitches the window 1
                                     w1_left.d2 = w1_intersection.d2;
                                     if(w1_left.p1 + eps < w1_left.p2) newWins.push_back(w1_left);
                                     if(w0_intersection.p1 +eps < w0_intersection.p2) newWins.push_back(w0_intersection);
@@ -492,6 +494,13 @@ double eps = 0.00001;
     bool belongInterval(double x, double a, double b){
         return (x  >= a + eps) && (x + eps <= b);
     }
+    
+    void printEdge(Edge* e){
+        cout << e->v1 << " --- " << e->v2 << endl;
+        for(auto w : e->windows){
+                cout << w.p1 << " ( " << w.d1 << " ) --- " <<w.p2 << " ( " << w.d2 << " ) sgima = " << w.sigma << " , tau = " << w.tau << endl; 
+        }
+    }
     void exactGeo(int s){
 
             set<Window, WindowComp> q;
@@ -554,8 +563,15 @@ double eps = 0.00001;
             if(isnan(alphar) || isnan(alphal) ) continue;
             newWindows = propagate(v1,v2,v3,alphal,alphar,p1,p2,dp1,dp2,w.sigma,! w.tau); 
 
+
             Edge* edge_to_propagate = edges[v2][v3];
+            cout << "edge before " << endl;
+            printEdge(edge_to_propagate);
             intersect(edges[v2][v3],newWindows,q);
+            cout << "edge after" << endl;
+            printEdge(edge_to_propagate);
+
+
             int temp = v2;
             v2 = v1; v1 = temp;
              dp1 = w.d1;
@@ -568,8 +584,12 @@ double eps = 0.00001;
 
            
             edge_to_propagate = edges[v2][v3];
+
+            cout << "edge before " << endl;
+            printEdge(edge_to_propagate);
             intersect(edges[v2][v3],newWindows,q);
-                        edge_to_propagate = edges[v2][v3];
+            cout << "edge after" << endl;
+            printEdge(edge_to_propagate);
 
 
 
