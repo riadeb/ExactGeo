@@ -78,7 +78,7 @@ double eps = 0.00001;
     public :
 
     vector<vector<Edge*> > edges;
-    unordered_map<pair<int,int>, vector<pair<int,int> >, PairHash> adjL;
+    unordered_map<pair<int,int>, int , PairHash> adjL;
     MatrixXd V; MatrixXi F;
 
     EdgeDS(MatrixXd _V, MatrixXi _F){
@@ -104,8 +104,9 @@ double eps = 0.00001;
                   int v1 = F(i, j);
                   int v2 = F(i, (j+1)%3);
                   int v3 = F(i, (j+2)%3);
-                  adjL[make_pair(v1,v2)].push_back(make_pair(v2,v3));
-                    adjL[make_pair(v1,v2)].push_back(make_pair(v3,v1));
+                  adjL[make_pair(v1,v2)] = v3;
+                    adjL[make_pair(v2,v3)] = v1;
+                     adjL[make_pair(v3,v1)] = v2;
                  
             }
 
@@ -137,7 +138,7 @@ double eps = 0.00001;
             res.v2 = v2;
         } 
         */
-             double sv2 = sqrt(d1*d1 + p1*p1 + 2* d1*p1*cos(alphal));
+        double sv2 = sqrt(d1*d1 + p1*p1 + 2* d1*p1*cos(alphal));
         double beta = asin(sin(alphar) * d1/sv2);
         if(M_PI -  alphal - teta <= -eps){
             double wl = v23.norm();
@@ -197,12 +198,15 @@ double eps = 0.00001;
                 if(w.d1 < eps) return w.sigma +  abs(w.p1 - x);
 
             double dw = abs(w.p2 - w.p1);
+                        if(w.d2 < eps) return w.sigma + abs(dw - x);
+
             double cosalphal =(dw*dw + w.d1*w.d1 - w.d2*w.d2) / (2*dw*w.d1);
             return  w.sigma + sqrt(w.d1*w.d1 + (x - w.p1)*(x - w.p1) - 2* w.d1*(x - w.p1)*cosalphal);
     }
     double dist_to_psource(Window& w,double x ){ //returns distance of point x in edge to the source using Window w
             if(w.d1 < eps) return abs(w.p1 - x);
             double dw = abs(w.p2 - w.p1);
+            if(w.d2 < eps) return abs(dw - x);
             double cosalphal =(dw*dw + w.d1*w.d1 - w.d2*w.d2) / (2*dw*w.d1);
             return  sqrt(w.d1*w.d1 + (x - w.p1)*(x - w.p1) - 2* w.d1*(x - w.p1)*cosalphal);
     }
@@ -222,10 +226,12 @@ double eps = 0.00001;
                     Window w1 = *it;
 
 
-                    if (w0.p1 >= w0.p2) break;
                     double p1_inter = max(w0.p1, w1.p1);
                     double p2_inter = min(w0.p2, w1.p2);
-                    if(p1_inter >= p2_inter) continue;
+                    if(p1_inter >= p2_inter) {
+                        it++;
+                        continue;
+                    }
                     //cut the existing window into 3 parts
                     Window w1_left = w1;
                     w1_left.p2 = p1_inter;
@@ -277,7 +283,10 @@ double eps = 0.00001;
                             //w1 is the "left" window
                             auto sol = solveEq(w0_intersection,w1_intersection);
                             double q1 = sol.first; double q2 = sol.second;
-                            if(q1 == INFINITY) it++;
+                            if(q1 == INFINITY || q1 != q1) {
+                                it++;
+                                continue;
+                            }
                             if((abs(q1 - q2) < eps &&  belongInterval(q1,p1_inter,p2_inter)) || (belongInterval(q1,p1_inter,p2_inter) && !belongInterval(q2,p1_inter,p2_inter)) ||  (belongInterval(q2,p1_inter,p2_inter) && !belongInterval(q1,p1_inter,p2_inter))){
                                //One solution to the equation in the intersection interval
                                 if( belongInterval(q2,p1_inter,p2_inter) && !belongInterval(q1,p1_inter,p2_inter) ) q1 = q2;
@@ -291,7 +300,6 @@ double eps = 0.00001;
                                     w1_left.p2 = w1_intersection.p2; //stitiches the window 1
                                     w1_left.d2 = w1_intersection.d2;
                                     if(w1_left.p1 + eps < w1_left.p2) newWins.push_back(w1_left);
-                                    // if(w1_intersection.p1 +eps < w1_intersection.p2) newWins.push_back(w1_intersection); 
                                     if(w0_intersection.p1 +eps < w0_intersection.p2) newWins.push_back(w0_intersection);
                                     if(w1_right.p1 + eps < w1_right.p2) newWins.push_back(w1_right);
 
@@ -359,7 +367,10 @@ double eps = 0.00001;
                         //w0 is the "left" window
                             auto sol = solveEq(w0_intersection,w1_intersection);
                             double q1 = sol.first; double q2 = sol.second;
-                            if(q1 == INFINITY) it++;
+                            if(q1 == INFINITY || q1 != q1) {
+                                it++;
+                                continue;
+                            }
                             if((abs(q1 - q2) < eps &&  belongInterval(q1,p1_inter,p2_inter)) || (belongInterval(q1,p1_inter,p2_inter) && !belongInterval(q2,p1_inter,p2_inter)) ||  (belongInterval(q2,p1_inter,p2_inter) && !belongInterval(q1,p1_inter,p2_inter))){
                                //One solution to the equation in the intersection interval
                                 if( belongInterval(q2,p1_inter,p2_inter) && !belongInterval(q1,p1_inter,p2_inter) ) q1 = q2;
@@ -432,7 +443,7 @@ double eps = 0.00001;
                                             q.erase(w1);
                                             if(w1_left.p1 + eps < w1_left.p2) q.insert(w1_left);
                                                 if(w1_right.p1 +eps  < w1_right.p2) q.insert(w1_right);
-                                                if(w1_intersection.p1 +eps  < w1_intersection.p2)newWins.push_back(w1_intersection);
+                                                if(w1_intersection.p1 +eps  < w1_intersection.p2) q.insert(w1_intersection);
                                         }
 
                             }
@@ -498,18 +509,17 @@ double eps = 0.00001;
                          edges[s][i]->windows.push_back(w);
                          //q.push(w);
                     }
-                    for(auto e : adjL[make_pair(s,i)]){
-                        if(e.first != s && e.second != s){
-                            Edge* edge =  edges[e.first][e.second];
-                            if(edge->windows.size() == 0){
-                                bool tau = e.first < e.second; //direction of window
-                                Window w = Window(edge,0, dist(edge->v1,edge->v2), dist(s,edge->v1), dist(s, edge->v2), 0,tau);
-                                q.insert(w);
-                                
-                                edge->windows.push_back(w);
-                            }
-                        }
+                    auto e = adjL[make_pair(s,i)];
+                    Edge* edge =  edges[e][i];
+                    if(edge->windows.size() == 0){
+                        bool tau = i < e; //direction of window
+                        Window w = Window(edge,0, dist(edge->v1,edge->v2), dist(s,edge->v1), dist(s, edge->v2), 0,tau);
+                        q.insert(w);
+                        
+                        edge->windows.push_back(w);
                     }
+                        
+                    
                 }
             }
 
@@ -523,14 +533,12 @@ double eps = 0.00001;
             double dw = abs(w.p1 - w.p2);
             int v3;
             if(w.tau){
-                    if(adjL[make_pair(v2,v1)].size() == 0) continue;
-                    pair<int,int> p = adjL[make_pair(v2,v1)][0];
-                    v3 = p.second; //p.firsy = v2
+                    if(adjL.find(make_pair(v2,v1)) == adjL.end()) continue;
+                    v3 = adjL[make_pair(v2,v1)];
             }
             else{
-                if(adjL[make_pair(v1,v2)].size() == 0) continue;
-                    pair<int,int> p = adjL[make_pair(v1,v2)][0];
-                     v3 = p.second; //p.firsy = v2
+                    if(adjL.find(make_pair(v1,v2)) == adjL.end()) continue;
+                    v3 = adjL[make_pair(v1,v2)];
             }
             
 
