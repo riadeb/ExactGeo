@@ -13,6 +13,8 @@
 using namespace Eigen; // to use the classes provided by Eigen library
 using namespace std;
 
+static int qtype_;
+
 class Edge;
 
 class Window {
@@ -47,18 +49,26 @@ public:
   }
 };
 
-class WindowComp
+ class WindowComp
 {
 public:
+    
   size_t operator()(const Window &w1, const Window &w2) const
   {
-      double d1min = min(w1.d1, w1.d2);
-    double d2min = min(w2.d1, w2.d2);
-    if(d1min != d2min) return d1min < d2min;
-    if(w1.edge->v1 != w2.edge->v1) return w1.edge->v1 < w2.edge->v1;
-    if(w1.edge->v2 != w2.edge->v2) return w1.edge->v2 < w2.edge->v2;
-    return w1.p1 < w2.p1;
-  }
+      int typeq = qtype_;
+      if(typeq == 0) {
+             return true;
+         }
+     else if (typeq == 1){
+        double d1min = min(w1.d1, w1.d2);
+        double d2min = min(w2.d1, w2.d2);
+        if(d1min != d2min) return d1min < d2min;
+        if(w1.edge->v1 != w2.edge->v1) return w1.edge->v1 < w2.edge->v1;
+        if(w1.edge->v2 != w2.edge->v2) return w1.edge->v2 < w2.edge->v2;
+        return w1.p1 < w2.p1;
+     }
+}
+  
 };
 
 class WindowInterval {
@@ -80,12 +90,14 @@ double eps = 0.00001;
     vector<vector<Edge*> > edges;
     unordered_map<pair<int,int>, int , PairHash> adjL;
     MatrixXd V; MatrixXi F;
+     static const int typeq;
 
-    EdgeDS(MatrixXd _V, MatrixXi _F){
+    EdgeDS(MatrixXd _V, MatrixXi _F,int q){
         V = _V;
         F = _F;
         int n = V.rows();
         int f = F.rows();
+        qtype_ = q;
         edges = vector<vector<Edge*> > (n, vector<Edge*>(n, nullptr));
         for(int i = 0; i < f; i++){
             for(int j = 0; j < 3; j++){
@@ -125,6 +137,22 @@ double eps = 0.00001;
     double dist_to_psource_in_new_window(double x, double dv2s, double angle_sv2_v2x){
         return sqrt(x*x + dv2s*dv2s - 2*dv2s*x*cos(angle_sv2_v2x));
     }
+
+
+    bool  compWins(const Window &w1, const Window &w2) const
+  {
+      if(typeq == 0) {
+             return true;
+         }
+     else if (typeq == 1){
+        double d1min = min(w1.d1, w1.d2);
+        double d2min = min(w2.d1, w2.d2);
+        if(d1min != d2min) return d1min < d2min;
+        if(w1.edge->v1 != w2.edge->v1) return w1.edge->v1 < w2.edge->v1;
+        if(w1.edge->v2 != w2.edge->v2) return w1.edge->v2 < w2.edge->v2;
+        return w1.p1 < w2.p1;
+     }
+  }
     WindowInterval propagate(int v1, int v2, int v3, double alphal, double alphar, double p1, double p2, double d1, double d2, double sigma, bool tau){
 
         Vector3d v21 = V.row(v1) - V.row(v2);
@@ -498,12 +526,12 @@ double eps = 0.00001;
     void printEdge(Edge* e){
         cout << e->v1 << " --- " << e->v2 << endl;
         for(auto w : e->windows){
-                cout << w.p1 << " ( " << w.d1 << " ) --- " <<w.p2 << " ( " << w.d2 << " ) sgima = " << w.sigma << " , tau = " << w.tau << endl; 
+                cout << w.p1 << " ( " << w.d1 << " ) --- " <<w.p2 << " ( " << w.d2 << " ) sigma = " << w.sigma << " , tau = " << w.tau << endl; 
         }
     }
-    void exactGeo(int s){
+    int exactGeo(int s){
+            set<Window, WindowComp > q;
 
-            set<Window, WindowComp> q;
 
             int n = edges.size();
             for(int i = 0; i < n; i++){ //initialize queue
@@ -531,8 +559,10 @@ double eps = 0.00001;
                     
                 }
             }
-
+        int countW = 0;
         while(! q.empty() ){
+            countW++;
+
             Window w = *q.begin();
             q.erase(q.begin());
             Edge* edge = w.edge;
@@ -565,11 +595,11 @@ double eps = 0.00001;
 
 
             Edge* edge_to_propagate = edges[v2][v3];
-            cout << "edge before " << endl;
-            printEdge(edge_to_propagate);
+           // cout << "edge before " << endl;
+           // printEdge(edge_to_propagate);
             intersect(edges[v2][v3],newWindows,q);
-            cout << "edge after" << endl;
-            printEdge(edge_to_propagate);
+           // cout << "edge after" << endl;
+           // printEdge(edge_to_propagate);
 
 
             int temp = v2;
@@ -585,19 +615,42 @@ double eps = 0.00001;
            
             edge_to_propagate = edges[v2][v3];
 
-            cout << "edge before " << endl;
-            printEdge(edge_to_propagate);
+           // cout << "edge before " << endl;
+            //printEdge(edge_to_propagate);
             intersect(edges[v2][v3],newWindows,q);
-            cout << "edge after" << endl;
-            printEdge(edge_to_propagate);
+            //cout << "edge after" << endl;
+           // printEdge(edge_to_propagate);
 
 
 
 
         }
 
-    }
+        return countW;
 
+    }
+    double distance(int v){ //after exactGeo is called
+            int n = V.rows();
+            double d = -1;
+            for(int i = 0; i <n ;i++){
+                if(edges[v][i] != nullptr){
+                        if(v < i){
+                            Window w = edges[v][i] -> windows.front();
+                            double nwd = dist_to_source(w,0);
+                            if(d == -1 || d > nwd) d = nwd;
+                           
+                        }
+                        else{
+                            Window w = edges[v][i] -> windows.back();
+                            double nwd =  dist_to_source(w, dist(v,i) );
+                            if(d == -1 || d > nwd)  d = nwd;
+                           
+                        }
+                }
+            }
+
+            return d;
+    }
 
     
 
